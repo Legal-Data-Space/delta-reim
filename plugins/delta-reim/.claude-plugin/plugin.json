@@ -1,0 +1,13 @@
+{
+  "name": "delta-reim",
+  "description": "Assistants de démarrage pour l'équipe Delta Reim : fiche synthèse de bail, compte rendu de réunion avec suivi des actions, atelier de création d'un nouvel assistant.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Legal Data Space",
+    "email": "contact@legaldataspace.eu",
+    "url": "https://www.legaldataspace.eu"
+  },
+  "homepage": "https://www.legaldataspace.eu",
+  "license": "UNLICENSED",
+  "keywords": ["immobilier", "bail", "compte rendu", "formation"]
+}

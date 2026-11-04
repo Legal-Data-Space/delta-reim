@@ -1,0 +1,25 @@
+{
+  "name": "lds-delta-reim",
+  "description": "Assistants Claude construits avec l'équipe Delta Reim pendant la formation-action Legal Data Space.",
+  "owner": {
+    "name": "Legal Data Space",
+    "email": "contact@legaldataspace.eu"
+  },
+  "metadata": {
+    "description": "Place de marché privée de plugins Claude pour Delta Reim, tenue par Legal Data Space.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "delta-reim",
+      "description": "Assistants de démarrage : fiche synthèse de bail, compte rendu de réunion avec suivi des actions, atelier de création d'un nouvel assistant.",
+      "source": "./plugins/delta-reim",
+      "version": "0.1.0",
+      "author": {
+        "name": "Legal Data Space"
+      },
+      "category": "productivity",
+      "keywords": ["immobilier", "bail", "compte rendu", "formation"]
+    }
+  ]
+}
