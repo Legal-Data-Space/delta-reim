@@ -30,7 +30,7 @@ Seuls les propriétaires de l'organisation voient cette page. Le rôle « Admin 
 ### Pour une seule personne
 
 1. Menu Personnaliser, onglet Plugins, puis Ajouter, puis « Ajouter une place de marché ».
-2. Saisir l'adresse du dépôt : `Legal-Data-Space/delta-reim-plugins`.
+2. Saisir l'adresse du dépôt : `Legal-Data-Space/delta-reim`.
 3. Dans l'onglet Découvrir, choisir le plugin `delta-reim` et cliquer sur Ajouter.
 
 Autre possibilité : Personnaliser, Plugins, Ajouter, « Importer un plugin », avec le fichier `plugin-delta-reim.zip`.
