@@ -1,0 +1,6 @@
+# Secret scan configuration (CI job "Secret scan (gitleaks)"). Changing this file changes the gate itself: it needs
+# the CTO's word (CONTRIBUTING.md, "Changes to the gate").
+# No allowlist: the full history had no finding on 17 Nov 2026. Add one only for a reviewed false positive, by path or
+# by commit, each with a comment saying what it is; never a blanket ignore.
+[extend]
+useDefault = true

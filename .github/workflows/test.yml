@@ -1,0 +1,131 @@
+# .github/workflows/test.yml
+---
+name: Tests (PR gate)
+
+on:
+  pull_request:
+  # Also on the trunk after a merge, so main shows its own status and the next
+  # pull request has a baseline. main is the only trunk in this repository.
+  push:
+    branches:
+      - main
+
+# Cancel superseded runs of a pull request. Each push to main gets a group of
+# its own (its run id): in a shared group GitHub keeps one pending run and
+# cancels the older one, and that push's commits would never be scanned.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('test-{0}', github.ref) || format('test-push-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# An explicit `shell: bash` runs as `bash -eo pipefail`: a failing command
+# inside a pipeline fails the step (the implicit default is `bash -e` only).
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The repository holds Markdown skills, two JSON manifests and one build
+  # script; there is no test suite. These are the checks that exist: the build
+  # script's own SKILL.md checks, the manifests, and shellcheck.
+  checks:
+    name: Plugin checks (manifests, skills, scripts)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tools on the runner
+        run: |
+          missing=""
+          for t in jq zip shellcheck; do command -v "$t" >/dev/null || missing="$missing $t"; done
+          [ -z "$missing" ] || { echo "::error::Missing on the runner:$missing"; exit 1; }
+
+      - name: Shell scripts (shellcheck)
+        run: shellcheck scripts/*.sh .github/scripts/*.sh .githooks/pre-push
+
+      # Every manifest parses, every plugin the marketplace lists exists with a
+      # plugin.json of the same name, and every plugin folder is listed.
+      - name: Marketplace and plugin manifests
+        run: |
+          jq -e . .claude-plugin/marketplace.json >/dev/null
+          listed=$(jq -r '.plugins[].name' .claude-plugin/marketplace.json | sort)
+          jq -r '.plugins[] | "\(.name) \(.source)"' .claude-plugin/marketplace.json |
+            while read -r name src; do
+              f="$src/.claude-plugin/plugin.json"
+              [ -f "$f" ] || { echo "::error::$name: $f missing"; exit 1; }
+              got=$(jq -r .name "$f")
+              [ "$got" = "$name" ] || { echo "::error::$f is named '$got', the marketplace says '$name'"; exit 1; }
+              echo "ok  $name ($src)"
+            done
+          folders=$(for d in plugins/*/; do basename "$d"; done | sort)
+          [ "$listed" = "$folders" ] || { echo "::error::plugins/ folders ($folders) and marketplace entries ($listed) differ"; exit 1; }
+
+      # The script fails when a SKILL.md name differs from its folder or a name
+      # or description is too long, and builds the upload zips (discarded here).
+      - name: Skills and upload zips (scripts/build-zips.sh)
+        run: scripts/build-zips.sh
+
+  # Secrets in the commits this run brings, merge commits included (each against
+  # every parent), not in the whole history. .github/scripts/secret-scan.sh fails
+  # closed on a range that does not resolve, an empty range or a rewritten main.
+  # The gitleaks binary is used rather than its action, which needs a licence key
+  # on organisation repositories; it is checked against the release's checksum.
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - name: Checkout (full history, for the commit range)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks (checksum verified)
+        run: |
+          cd "$RUNNER_TEMP"
+          f=gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz
+          curl -fsSL -o "$f" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$f"
+          echo "${GITLEAKS_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" gitleaks
+          ./gitleaks version
+
+      - name: Scan the commits of this run
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          GITLEAKS: ${{ runner.temp }}/gitleaks
+        run: .github/scripts/secret-scan.sh
+
+  # The one check to require on main once a ruleset is applied. Fails unless
+  # every job above succeeded; runs even when one failed or was skipped (not
+  # when the run was cancelled), so a skipped job can never count as a pass.
+  ci-green:
+    name: ci-green
+    needs: [checks, secret-scan]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result != "success") | .key] | join(", ")')
+          if [ -n "$bad" ]; then
+            echo "::error::Not green: $bad"
+            exit 1
+          fi

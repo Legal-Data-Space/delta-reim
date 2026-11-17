@@ -1,0 +1,34 @@
+#!/bin/sh
+# Refuses a push whose target is main (changes reach main through a pull request) or that sends tags (they need
+# the CTO's word). CONTRIBUTING.md.
+# Enabled per clone with: git config core.hooksPath .githooks
+# A reminder, not a lock: `git push --no-verify` skips it.
+
+remote="$1"
+main=0
+tags=""
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+	case "$remote_ref" in
+	refs/heads/main) main=1 ;;
+	refs/tags/*) tags="$tags ${remote_ref#refs/tags/}" ;;
+	esac
+done
+
+if [ "$main" = 1 ]; then
+	cat >&2 <<MSG
+pre-push: refused, this push targets main on '$remote'.
+main is never pushed to directly. Push your branch and open a pull request:
+    git push -u $remote HEAD:refs/heads/<feat|fix|docs|chore|ci>/<subject>
+See CONTRIBUTING.md.
+MSG
+fi
+if [ -n "$tags" ]; then
+	cat >&2 <<MSG
+pre-push: refused, this push sends tags to '$remote':$tags
+Tags and releases need the CTO's word. See CONTRIBUTING.md.
+MSG
+fi
+if [ "$main" = 1 ] || [ -n "$tags" ]; then
+	exit 1
+fi
+exit 0
